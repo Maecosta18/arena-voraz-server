@@ -1009,8 +1009,8 @@
 
     if (alive){
       var kv = keyboardVec();
-      var jx = (kv.x!<0||kv.y!<0) ? kv.x : joyVec.x;
-      var jy = (kv.x0===0||kv.y!==0) ? kv.y : joyVec.y;
+      var jx = (kv.x!==0||kv.y!==0) ? kv.x : joyVec.x;
+      var jy = (kv.x!==0||kv.y!==0) ? kv.y : joyVec.y;
       var mag = Math.hypot(jx,jy);
       var forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
       var right = new THREE.Vector3(forward.z, 0, -forward.x);
@@ -1062,7 +1062,7 @@
 
     updateTracers(dt);
     updateEffects(dt);
-    updateCosmeticProjectiles()dt);
+    updateCosmeticProjectiles(dt);
 
     renderer.render(scene, camera);
     requestAnimationFrame(loop);
