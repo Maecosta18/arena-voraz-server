@@ -217,10 +217,12 @@
     <button class="smallbtn" id="jumpBtn" aria-label="Saltar">⬆</button>
     <button id="fireBtn" type="button">DISPARAR</button>
   </div>
-  <p class="footnote" id="footnote"></p>
+  <p class="footnote" id="footnote">Modelo de personaje "CesiumMan" por <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener" style="color:inherit;">Analytical Graphics, Inc. / Khronos Group</a>, licencia <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener" style="color:inherit;">CC BY 4.0</a>, modificado.</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
 <script>
 (function(){
   "use strict";
@@ -435,8 +437,7 @@
       var dx = e.clientX - previewLastX; previewLastX = e.clientX;
       previewYaw += dx * 0.012;
     });
-    ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
-      charPreviewCanvas.addEventListener(ev, function(){ previewDragging = false; });
+    ['pointerup','pointercancel','pointerleave'].forEach(function(ev){      charPreviewCanvas.addEventListener(ev, function(){ previewDragging = false; });
     });
   }
   function resizePreview(){
@@ -460,6 +461,9 @@
     if (previewDirty) rebuildPreviewAvatar();
     if (previewAutoSpin) previewYaw += 0.007;
     if (previewGroup) previewGroup.rotation.y = previewYaw;
+    if (previewGroup && previewGroup.userData && previewGroup.userData.mixer){
+      previewGroup.userData.mixer.update(0.016);
+    }
     previewCamera.position.set(0, 1.18, 3.05);
     previewCamera.lookAt(0, 1.02, 0);
     previewRenderer.render(previewScene, previewCamera);
@@ -652,8 +656,7 @@
       if (dist < minD && dist > 0.0001){
         var push = (minD-dist);
         pos.x += dx/dist*push; pos.z += dz/dist*push;
-      }
-    }
+  }    }
   }
 
   /* ===================== avatar builder (humanoid, editable clothing & face) ===================== */
@@ -863,6 +866,148 @@
     }
   }
 
+  /* ===================== avatar real (CesiumMan) — con fallback automático al muñeco de siempre ===================== */
+  var CESIUM_MODEL_URL = '/cesiumman.glb';
+  var CESIUM_TARGET_HEIGHT = 1.8;
+  var cesiumTemplate = null;
+  var cesiumAnimClip = null;
+  var cesiumReady = false;
+  var cesiumScale = 1;
+  var cesiumGroundY = 0;
+  var CESIUM_HEAD_ROUND = 0.45, CESIUM_HEAD_H = 1.0, CESIUM_HEAD_W = 1.0;  function bakeHeadShape(skinnedMesh){
+    var bones = skinnedMesh.skeleton.bones;
+    var headBoneIdx = -1;
+    for (var bi=0; bi<bones.length; bi++){ if (bones[bi].name === 'Skeleton_neck_joint_2'){ headBoneIdx = bi; break; } }
+    if (headBoneIdx < 0) return;
+    var geo = skinnedMesh.geometry;
+    var posAttr = geo.attributes.position;
+    var skinIdxAttr = geo.attributes.skinIndex;
+    var skinWtAttr = geo.attributes.skinWeight;
+    var n = posAttr.count;
+    var idxSize = skinIdxAttr.itemSize || 4, wtSize = skinWtAttr.itemSize || 4;
+    var headVerts = [];
+    var sx=0, sy=0, sz=0;
+    var minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity, minZ=Infinity, maxZ=-Infinity;
+    for (var i=0;i<n;i++){
+      var isHead = false;
+      for (var k=0;k<4;k++){
+        if (skinIdxAttr.array[i*idxSize+k] === headBoneIdx && skinWtAttr.array[i*wtSize+k] > 0.5){ isHead = true; break; }
+      }
+      if (isHead){
+        var x=posAttr.getX(i), y=posAttr.getY(i), z=posAttr.getZ(i);
+        headVerts.push(i); sx+=x; sy+=y; sz+=z;
+        if (x<minX)minX=x; if (x>maxX)maxX=x;
+        if (y<minY)minY=y; if (y>maxY)maxY=y;
+        if (z<minZ)minZ=z; if (z>maxZ)maxZ=z;
+      }
+    }
+    if (!headVerts.length) return;
+    var cx=sx/headVerts.length, cy=sy/headVerts.length, cz=sz/headVerts.length;
+    var headRadius = Math.max(maxX-minX, maxY-minY, maxZ-minZ) * 0.42;
+    for (var k2=0;k2<headVerts.length;k2++){
+      var vi = headVerts[k2];
+      var dx = posAttr.getX(vi)-cx, dy = posAttr.getY(vi)-cy, dz = posAttr.getZ(vi)-cz;
+      dx *= CESIUM_HEAD_W; dy *= CESIUM_HEAD_H; dz *= CESIUM_HEAD_W;
+      var len = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1e-6;
+      var rx = dx/len*headRadius, ry = dy/len*headRadius, rz = dz/len*headRadius;
+      var fx = dx + (rx-dx)*CESIUM_HEAD_ROUND, fy = dy + (ry-dy)*CESIUM_HEAD_ROUND, fz = dz + (rz-dz)*CESIUM_HEAD_ROUND;
+      posAttr.setXYZ(vi, cx+fx, cy+fy, cz+fz);
+    }
+    posAttr.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
+
+  function findBoneByName(obj, name){
+    var found = null;
+    obj.traverse(function(o){ if (!found && o.isBone && o.name === name) found = o; });
+    return found;
+  }
+
+  function attachClothingPiece(bone, geo, color, localOffset){
+    var mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: color, side: THREE.DoubleSide }));
+    bone.add(mesh);
+    mesh.position.copy(localOffset);
+    return mesh;
+  }
+
+  function buildAvatarCesium(cfg){
+    var g = new THREE.Group();
+    var clone = THREE.SkeletonUtils.clone(cesiumTemplate);
+    clone.scale.setScalar(cesiumScale);
+    clone.position.y = cesiumGroundY;
+    clone.traverse(function(o){ if (o.isMesh){ o.castShadow=false; o.receiveShadow=false; if (o.material) o.material.side = THREE.FrontSide; } });
+    g.add(clone);
+
+    var torsoBone = findBoneByName(clone, 'torso_joint_3');
+    var hipBone = findBoneByName(clone, 'Skeleton_torso_joint_1');
+    var handBone = findBoneByName(clone, 'Skeleton_arm_joint_R__3_');
+    var anchor = new THREE.Group();
+
+    if (torsoBone){
+      attachClothingPiece(torsoBone, new THREE.CylinderGeometry(0.144, 0.1215, 0.36, 20, 1, true), cfg.shirt || '#37e6c4', new THREE.Vector3(0, 0.02, 0));
+    }
+    if (hipBone){
+      attachClothingPiece(hipBone, new THREE.CylinderGeometry(0.1305, 0.099, 0.45, 20, 1, true), cfg.pants || '#2a2a2a', new THREE.Vector3(0, -0.2, 0));
+    }
+    if (handBone){
+      handBone.add(anchor);
+      anchor.position.set(0, -0.05, 0.04);
+    } else {
+      g.add(anchor);
+      anchor.position.set(0.335, 0.90, 0.18);
+    }
+
+    var mixer = null, action = null;
+    if (cesiumAnimClip){
+      mixer = new THREE.AnimationMixer(clone);
+      action = mixer.clipAction(cesiumAnimClip);
+      action.play();
+    }
+
+    var shadow = new THREE.Mesh(new THREE.CircleGeometry(0.48,16), new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.35 }));
+    shadow.rotation.x = -Math.PI/2; shadow.position.y = 0.02; g.add(shadow);
+
+    var nameTex = new THREE.CanvasTexture(makeNameTexture(cfg.name||'???', 100, !!cfg.isMe));
+    var nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:nameTex, depthTest:false, transparent:true }));
+    nameSprite.scale.set(1.5, 0.5, 1); nameSprite.position.set(0, CESIUM_TARGET_HEIGHT + 0.55, 0);
+    g.add(nameSprite);
+
+    g.userData = { anchor:anchor, nameSprite:nameSprite, lastHpBucket:100, lastName:null, mixer:mixer, action:action, isCesium:true };
+    return g;
+  }
+
+  var buildAvatarPrimitive = buildAvatar;
+  buildAvatar = function(cfg){
+    if (cesiumReady){
+      try{ return buildAvatarCesium(cfg); }catch(e){ console.error('buildAvatarCesium falló, uso el muñeco de respaldo', e); }
+    }
+    return buildAvatarPrimitive(cfg);
+  };
+
+  function loadCesiumModel(){
+    if (typeof THREE.GLTFLoader === 'undefined' || typeof THREE.SkeletonUtils === 'undefined') return;
+    var loader = new THREE.GLTFLoader();
+    loader.load(CESIUM_MODEL_URL, function(gltf){
+      var skinnedMesh = null;
+      gltf.scene.traverse(function(o){ if (o.isSkinnedMesh && !skinnedMesh) skinnedMesh = o; });
+      if (!skinnedMesh){ console.error('CesiumMan sin SkinnedMesh, se usa el muñeco de respaldo'); return; }
+      try{ bakeHeadShape(skinnedMesh); }catch(e){ console.error('bakeHeadShape falló', e); }
+
+      var box = new THREE.Box3().setFromObject(gltf.scene);
+      var rawHeight = box.max.y - box.min.y;
+      cesiumScale = rawHeight > 0.01 ? (CESIUM_TARGET_HEIGHT / rawHeight) : 1;
+      cesiumGroundY = -box.min.y * cesiumScale;
+
+      cesiumTemplate = gltf.scene;
+      cesiumAnimClip = (gltf.animations && gltf.animations.length) ? gltf.animations[0] : null;
+      cesiumReady = true;
+      previewDirty = true;
+    }, undefined, function(err){
+      console.error('No se pudo cargar cesiumman.glb, se usa el muñeco de respaldo', err);
+    });
+  }
+  loadCesiumModel();
+
   /* ===================== local player state ===================== */
   var myName = '';
   var player = { pos: nearestSpawn(), vy:0, grounded:true, facing:0 };
@@ -948,8 +1093,7 @@
     var gain = ctx.createGain();
     gain.gain.setValueAtTime(0.001, t0);
     gain.gain.exponentialRampToValueAtTime(0.16, t0+0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
-    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
     noise.start(t0);
   }
 
@@ -1168,8 +1312,7 @@
       else { var peer = peers3D[msg.id]; if (peer) peer.kills = msg.kills; }
       renderLiveBoard();
     } else if (msg.t === 'kill'){
-      toast((msg.byName||'???') + ' eliminó a ' + (msg.victimName||'???'));
-    } else if (msg.t === 'respawn'){
+      toast((msg.byName||'???') + ' eliminó a ' + (msg.victimName||'???'));    } else if (msg.t === 'respawn'){
       onRespawn(msg.id, msg.x, msg.z);
     }
   }
@@ -1344,6 +1487,10 @@
       myGroup.position.set(player.pos.x, player.pos.y, player.pos.z);
       myGroup.rotation.y = player.facing;
       refreshNameSprite(myGroup, myName, myHp, true);
+      if (myGroup.userData && myGroup.userData.mixer){
+        myGroup.userData.mixer.update(dt);
+        if (myGroup.userData.action) myGroup.userData.action.paused = (mag <= 0.12);
+      }
       sendMove(false);
     }
 
@@ -1355,11 +1502,19 @@
     Object.keys(peers3D).forEach(function(uid){
       var p = peers3D[uid];
       var cur = p.group.position;
+      var prevX = cur.x, prevZ = cur.z;
       cur.x += ((p.targetX!==undefined?p.targetX:cur.x) - cur.x) * 0.25;
       cur.z += ((p.targetZ!==undefined?p.targetZ:cur.z) - cur.z) * 0.25;
       p.group.rotation.y += (((p.yaw||0) - p.group.rotation.y + Math.PI*3) % (Math.PI*2) - Math.PI) * 0.25;
       p.group.visible = (p.hp === undefined || p.hp > 0);
       refreshNameSprite(p.group, p.name||'???', p.hp===undefined?100:p.hp, false);
+      if (p.group.userData && p.group.userData.mixer){
+        p.group.userData.mixer.update(dt);
+        if (p.group.userData.action){
+          var moved = Math.hypot(cur.x-prevX, cur.z-prevZ);
+          p.group.userData.action.paused = (moved < 0.0015);
+        }
+      }
     });
 
     if (dustPoints) dustPoints.rotation.y += dt*0.02;
