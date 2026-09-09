@@ -45,7 +45,7 @@ function serveStatic(req, res){
 const server = http.createServer(serveStatic);
 
 /* ============================================================ */
-/* ------------------- minimal websocket frames ----------------- */
+/* -------------------- minimal websocket frames ----------------- */
 /* ============================================================ */
 function encodeFrame(str){
   const payload = Buffer.from(str, 'utf8');
@@ -104,7 +104,7 @@ function tryParseFrame(buf){
 }
 
 /* ============================================================ */
-/* ------------------------- game config ------------------------ */
+/* ----------------------- game config ------------------------ */
 /* ============================================================ */
 const ARENA_R = 34;
 const GRAVITY = -15.5;
@@ -120,8 +120,15 @@ const WEAPONS = {
 };
 const MAX_NAME_LEN = 14;
 const MAX_PLAYERS = 24;
+const MAX_BOTS = 8;
+const BOT_NAMES = ['Rocko','Bicho','Fierro','Tormenta','Cactus','Nube','Chispa','Torbellino','Garra','Piedra','Rayo','Sombra','Zorro','Puma'];
+const BOT_SKINS = ['#f2c9a1','#d9a066','#a9673f','#7a4a2b','#3a2a1d','#f0dcc4'];
+const BOT_SHIRTS = ['#37e6c4','#ff5c5c','#ffb454','#7ea8ff','#c98bf0','#6bd68a'];
+const BOT_PANTS = ['#22314f','#1c1c1c','#6b5b3e','#2f4a33','#4a4a4a','#5a3825'];
+const BOT_HATS = ['none','cap','band','party'];
 
 function pickSpawn(){ return SPAWN_POINTS[(Math.random()*SPAWN_POINTS.length)|0]; }
+function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
 function clampNum(n, fallback){ n = Number(n); return Number.isFinite(n) ? n : (fallback||0); }
 function safeStr(s, max){ return String(s==null?'':s).slice(0, max||64); }
 function normalize3(v){
@@ -133,7 +140,7 @@ function genId(){ return crypto.randomBytes(9).toString('base64').replace(/[+/=]
 
 // closest intersection of a ray (origin,dir) with a sphere (center,radius),
 // within `maxDist`. Returns {dist, point} or null.
-function raySphereHit(origin, dir, center, radius, maxDist){
+function raySphereHit(origin, dir, center, r2adius, maxDist){
   const ocx = origin.x-center.x, ocy = origin.y-center.y, ocz = origin.z-center.z;
   const b = ocx*dir.x + ocy*dir.y + ocz*dir.z;
   const c = ocx*ocx+ocy*ocy+ocz*ocz - radius*radius;
@@ -169,7 +176,7 @@ function publicView(id){
   const p = players.get(id);
   if (!p || !p.joined) return null;
   return { id, name:p.name, skin:p.skin, shirt:p.shirt, pants:p.pants, hat:p.hat, glasses:p.glasses,
-    weapon:p.weapon, x:p.x, z:p.z, yaw:p.yaw, hp:p.hp, kills:p.kills, alive:p.alive };
+    weapon:p.weapon, x:p.x, z:p.z, yaw:p.yaw, hp:p.hp, kills:p.kills, alive:p.alive, isBot: !!p.isBot };
 }
 function snapshot(){
   const out = [];
@@ -240,15 +247,8 @@ function handleWeapon(id, p, msg){
   if (!p.joined) return;
   p.weapon = msg.weapon === 'honda' ? 'honda' : 'blaster';
 }
-function handleFire(id, p, msg){
-  if (!p.joined || !p.alive) return;
+function fireWeapon(id, p, origin, dir){
   const w = WEAPONS[p.weapon] || WEAPONS.blaster;
-  const now = Date.now();
-  if (now - p.lastFireAt < w.cooldown - 40) return; // small slack for jitter, but rate-limited server-side
-  p.lastFireAt = now;
-  const origin = { x: clampNum(msg.ox,p.x), y: clampNum(msg.oy,1), z: clampNum(msg.oz,p.z) };
-  const dir = normalize3({ x: clampNum(msg.dx,0), y: clampNum(msg.dy,0), z: clampNum(msg.dz,1) });
-
   if (w.kind === 'hitscan'){
     let best = null;
     for (const [tid, t] of players){
@@ -265,6 +265,101 @@ function handleFire(id, p, msg){
     broadcast({ t:'shot', by:id, weapon:'honda', from:origin, dir }, null);
   }
 }
+function handleFire(id, p, msg){
+  if (!p.joined || !p.alive) return;
+  const w = WEAPONS[p.weapon] || WEAPONS.blaster;
+  const now = Date.now();
+  if (now - p.lastFireAt < w.cooldown - 40) return; // small slack for jitter, but rate-limited server-side
+  p.lastFireAt = now;
+  const origin = { x: clampNum(msg.ox,p.x), y: clampNum(msg.oy,1), z: clampNum(msg.oz,p.z) };
+  const dir = normalize3({ x: clampNum(msg.dx,0), y: clampNum(msg.dy,0), z: clampNum(msg.dz,1) });
+  fireWeapon(id, p, origin, dir);
+}
+
+/* ============================================================ */
+/* ----------------------------- bots ----------------------------- */
+/* ============================================================ */
+function botCountNow(){
+  let n = 0; for (const p of players.values()) if (p.isBot) n++;
+  return n;
+}
+function spawnBot(){
+  if (players.size >= MAX_PLAYERS || botCountNow() >= MAX_BOTS) return null;
+  const id = 'bot_' + genId();
+  const sp = pickSpawn();
+  const p = {
+    socket: { destroyed:true }, buf: Buffer.alloc(0), joined:true, isBot:true,
+    name: pick(BOT_NAMES), skin: pick(BOT_SKINS), shirt: pick(BOT_SHIRTS), pants: pick(BOT_PANTS),
+    hat: pick(BOT_HATS), glasses: Math.random()<0.3, weapon: Math.random()<0.5 ? 'honda' : 'blaster',
+    x: sp.x, y:0, z: sp.z, yaw:0, hp:100, kills:0, alive:true, lastFireAt:0,
+    invulnerableUntil: Date.now()+1000,
+    aiSpeed: 3.5 + Math.random()*1.1, aiStrafeDir: Math.random()<0.5?1:-1,
+    aiWanderX: sp.x, aiWanderZ: sp.z, aiNextWanderAt: 0
+  };
+  players.set(id, p);
+  let sc = scoreboard.get(id);
+  if (!sc){ sc = { name:p.name, kills:0 }; scoreboard.set(id, sc); }
+  broadcast({ t:'join', player: publicView(id) }, null);
+  return id;
+}
+function removeBot(){
+  let targetId = null;
+  for (const [id, p] of players){ if (p.isBot) targetId = id; } // last one added wins (Map preserves insertion order)
+  if (!targetId) return false;
+  players.delete(targetId);
+  broadcast({ t:'leave', id: targetId }, null);
+  return true;
+}
+function updateBots(dt){
+  const now = Date.now();
+  const alivePlayers = [];
+  for (const [id, p] of players) if (p.joined && p.alive) alivePlayers.push({ id, p });
+
+  for (const [id, p] of players){
+    if (!p.isBot || !p.alive) continue;
+    let target = null, bestD = Infinity;
+    for (const o of alivePlayers){
+      if (o.id === id) continue;
+      const d = Math.hypot(o.p.x-p.x, o.p.z-p.z);
+      if (d < bestD){ bestD = d; target = o; }
+    }
+    const w = WEAPONS[p.weapon] || WEAPONS.blaster;
+    let moveX = 0, moveZ = 0;
+
+    if (target && bestD < 28){
+      const dx = target.p.x-p.x, dz = target.p.z-p.z;
+      const d = Math.hypot(dx,dz) || 1;
+      const dirX = dx/d, dirZ = dz/d;
+      if (d > w.range*0.72){ moveX = dirX; moveZ = dirZ; }
+      else if (d < w.range*0.4){ moveX = -dirX; moveZ = -dirZ; }
+      else { moveX = -dirZ*p.aiStrafeDir; moveZ = dirX*p.aiStrafeDir; }
+
+      if (d <= w.range && now - p.lastFireAt >= w.cooldown){
+        p.lastFireAt = now;
+        const aim = normalize3({ x: dirX, y: (Math.random()-0.5)*0.08, z: dirZ });
+        fireWeapon(id, p, { x:p.x, y:1.5, z:p.z }, aim);
+      }
+    } else {
+      if (now > p.aiNextWanderAt){
+        const ang = Math.random()*Math.PI*2, rad = Math.random()*ARENA_R*0.7;
+        p.aiWanderX = Math.cos(ang)*rad; p.aiWanderZ = Math.sin(ang)*rad;
+        p.aiNextWanderAt = now + 3000 + Math.random()*3000;
+      }
+      const dx = p.aiWanderX-p.x, dz = p.aiWanderZ-p.z;
+      const d = Math.hypot(dx,dz) || 1;
+      moveX = dx/d; moveZ = dz/d;
+    }
+
+    if (moveX || moveZ){
+      const mlen = Math.hypot(moveX,moveZ) || 1;
+      p.x += (moveX/mlen)*p.aiSpeed*dt;
+      p.z += (moveZ/mlen)*p.aiSpeed*dt;
+      const distC = Math.hypot(p.x,p.z);
+      if (distC > ARENA_R-1){ const k=(ARENA_R-1)/distC; p.x*=k; p.z*=k; }
+      p.yaw = Math.atan2(moveX, moveZ);
+    }
+  }
+}
 
 function handleMessage(id, raw){
   const p = players.get(id);
@@ -276,6 +371,8 @@ function handleMessage(id, raw){
   else if (msg.t === 'move') handleMove(id, p, msg);
   else if (msg.t === 'weapon') handleWeapon(id, p, msg);
   else if (msg.t === 'fire') handleFire(id, p, msg);
+  else if (msg.t === 'addBot' && p.joined) spawnBot();
+  else if (msg.t === 'removeBot' && p.joined) removeBot();
 }
 
 function dropPlayer(id){
@@ -358,6 +455,9 @@ setInterval(() => {
 
 setInterval(() => {
   if (players.size === 0) return;
+  let hasHuman = false;
+  for (const p of players.values()) if (p.joined && !p.isBot){ hasHuman = true; break; }
+  if (hasHuman) updateBots(0.1);
   broadcast({ t:'state', players: snapshot(), leaderboard: leaderboardTop(8) }, null);
 }, 100);
 
