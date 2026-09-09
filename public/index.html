@@ -942,17 +942,9 @@
     clone.traverse(function(o){ if (o.isMesh){ o.castShadow=false; o.receiveShadow=false; if (o.material) o.material.side = THREE.FrontSide; } });
     g.add(clone);
 
-    var torsoBone = findBoneByName(clone, 'torso_joint_3');
-    var hipBone = findBoneByName(clone, 'Skeleton_torso_joint_1');
     var handBone = findBoneByName(clone, 'Skeleton_arm_joint_R__3_');
     var anchor = new THREE.Group();
 
-    if (torsoBone){
-      attachClothingPiece(torsoBone, new THREE.CylinderGeometry(0.144, 0.1215, 0.36, 20, 1, true), cfg.shirt || '#37e6c4', new THREE.Vector3(0, 0.02, 0));
-    }
-    if (hipBone){
-      attachClothingPiece(hipBone, new THREE.CylinderGeometry(0.1305, 0.099, 0.45, 20, 1, true), cfg.pants || '#2a2a2a', new THREE.Vector3(0, -0.2, 0));
-    }
     if (handBone){
       handBone.add(anchor);
       anchor.position.set(0, -0.05, 0.04);
@@ -1281,10 +1273,13 @@
     if (!msg || typeof msg.t !== 'string') return;
     if (msg.t === 'welcome'){
       myId = msg.id;
+      player.pos.set(msg.x, 0, msg.z); player.vy = 0; player.grounded = true;
+      if (myGroup) myGroup.position.set(player.pos.x, player.pos.y, player.pos.z);
       (msg.players||[]).forEach(upsertPeer);
       renderLifeBoard(msg.leaderboard);
       updateBotCountUI();
       joined = true;
+      sendMove(true);
     } else if (msg.t === 'join'){
       upsertPeer(msg.player);
       updateBotCountUI();
