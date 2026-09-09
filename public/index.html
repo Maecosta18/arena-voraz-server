@@ -437,7 +437,8 @@
       var dx = e.clientX - previewLastX; previewLastX = e.clientX;
       previewYaw += dx * 0.012;
     });
-    ['pointerup','pointercancel','pointerleave'].forEach(function(ev){      charPreviewCanvas.addEventListener(ev, function(){ previewDragging = false; });
+    ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
+      charPreviewCanvas.addEventListener(ev, function(){ previewDragging = false; });
     });
   }
   function resizePreview(){
@@ -656,7 +657,8 @@
       if (dist < minD && dist > 0.0001){
         var push = (minD-dist);
         pos.x += dx/dist*push; pos.z += dz/dist*push;
-  }    }
+  }
+    }
   }
 
   /* ===================== avatar builder (humanoid, editable clothing & face) ===================== */
@@ -874,7 +876,9 @@
   var cesiumReady = false;
   var cesiumScale = 1;
   var cesiumGroundY = 0;
-  var CESIUM_HEAD_ROUND = 0.45, CESIUM_HEAD_H = 1.0, CESIUM_HEAD_W = 1.0;  function bakeHeadShape(skinnedMesh){
+  var CESIUM_HEAD_ROUND = 0.45, CESIUM_HEAD_H = 1.0, CESIUM_HEAD_W = 1.0;
+
+  function bakeHeadShape(skinnedMesh){
     var bones = skinnedMesh.skeleton.bones;
     var headBoneIdx = -1;
     for (var bi=0; bi<bones.length; bi++){ if (bones[bi].name === 'Skeleton_neck_joint_2'){ headBoneIdx = bi; break; } }
@@ -1093,7 +1097,8 @@
     var gain = ctx.createGain();
     gain.gain.setValueAtTime(0.001, t0);
     gain.gain.exponentialRampToValueAtTime(0.16, t0+0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
     noise.start(t0);
   }
 
@@ -1312,7 +1317,8 @@
       else { var peer = peers3D[msg.id]; if (peer) peer.kills = msg.kills; }
       renderLiveBoard();
     } else if (msg.t === 'kill'){
-      toast((msg.byName||'???') + ' eliminó a ' + (msg.victimName||'???'));    } else if (msg.t === 'respawn'){
+      toast((msg.byName||'???') + ' eliminó a ' + (msg.victimName||'???'));
+    } else if (msg.t === 'respawn'){
       onRespawn(msg.id, msg.x, msg.z);
     }
   }
