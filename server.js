@@ -126,6 +126,11 @@ const BOT_SKINS = ['#f2c9a1','#d9a066','#a9673f','#7a4a2b','#3a2a1d','#f0dcc4'];
 const BOT_SHIRTS = ['#37e6c4','#ff5c5c','#ffb454','#7ea8ff','#c98bf0','#6bd68a'];
 const BOT_PANTS = ['#22314f','#1c1c1c','#6b5b3e','#2f4a33','#4a4a4a','#5a3825'];
 const BOT_HATS = ['none','cap','band','party'];
+const BOT_HAIRS = ['#1c140f','#3b2a1e','#caa15a','#8a3b28','#e8e8e8','#3fa0e0'];
+const BOT_EYES = ['#4a2f1f','#2f6fb3','#3f8f5a','#6a6a6a','#8a5a2f','#1a1210'];
+const BOT_FACIALS = ['none','none','beard','mustache','goatee'];
+const BOT_TOPS = ['tank','tshirt','tshirt','jacket'];
+const BOT_BOTTOMS = ['shorts','long','long'];
 
 function pickSpawn(){ return SPAWN_POINTS[(Math.random()*SPAWN_POINTS.length)|0]; }
 function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
@@ -176,6 +181,7 @@ function publicView(id){
   const p = players.get(id);
   if (!p || !p.joined) return null;
   return { id, name:p.name, skin:p.skin, shirt:p.shirt, pants:p.pants, hat:p.hat, glasses:p.glasses,
+    hair:p.hair, eye:p.eye, facial:p.facial, top:p.top, bottom:p.bottom,
     weapon:p.weapon, x:p.x, z:p.z, yaw:p.yaw, hp:p.hp, kills:p.kills, alive:p.alive, isBot: !!p.isBot };
 }
 function snapshot(){
@@ -231,6 +237,11 @@ function handleJoin(id, p, msg){
   p.shirt = safeStr(msg.shirt, 16) || '#37e6c4';
   p.pants = safeStr(msg.pants, 16) || '#2a2a2a';
   p.hat = safeStr(msg.hat, 16) || 'none';
+  p.hair = safeStr(msg.hair, 16) || '#3b2a1e';
+  p.eye = safeStr(msg.eye, 16) || '#1a1210';
+  p.facial = ['none','beard','mustache','goatee'].includes(msg.facial) ? msg.facial : 'none';
+  p.top = ['tank','tshirt','jacket'].includes(msg.top) ? msg.top : 'tshirt';
+  p.bottom = ['shorts','long'].includes(msg.bottom) ? msg.bottom : 'long';
   p.glasses = !!msg.glasses;
   p.weapon = msg.weapon === 'honda' ? 'honda' : 'blaster';
   p.joined = true;
@@ -290,7 +301,9 @@ function spawnBot(){
   const p = {
     socket: { destroyed:true }, buf: Buffer.alloc(0), joined:true, isBot:true,
     name: pick(BOT_NAMES), skin: pick(BOT_SKINS), shirt: pick(BOT_SHIRTS), pants: pick(BOT_PANTS),
-    hat: pick(BOT_HATS), glasses: Math.random()<0.3, weapon: Math.random()<0.5 ? 'honda' : 'blaster',
+    hat: pick(BOT_HATS), hair: pick(BOT_HAIRS), eye: pick(BOT_EYES), facial: pick(BOT_FACIALS),
+    top: pick(BOT_TOPS), bottom: pick(BOT_BOTTOMS),
+    glasses: Math.random()<0.3, weapon: Math.random()<0.5 ? 'honda' : 'blaster',
     x: sp.x, y:0, z: sp.z, yaw:0, hp:100, kills:0, alive:true, lastFireAt:0,
     invulnerableUntil: Date.now()+1000,
     aiSpeed: 3.5 + Math.random()*1.1, aiStrafeDir: Math.random()<0.5?1:-1,
