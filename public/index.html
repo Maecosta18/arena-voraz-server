@@ -514,7 +514,8 @@
     for (i=0;i<26;i++){
       g.beginPath();
       var sx = rng()*512, sy = rng()*512;
-      g.moveTo(sx, sy);  var segs = 3+((rng()*4)|0);
+      g.moveTo(sx, sy);
+      var segs = 3+((rng()*4)|0);
       for (var s=0;s<segs;s++){ sx += (rng()-0.5)*90; sy += (rng()-0.5)*90; g.lineTo(sx, sy); }
       g.stroke();
     }
