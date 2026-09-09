@@ -1052,7 +1052,7 @@
       var p = peers3D[uid];
       var cur = p.group.position;
       cur.x += ((p.targetX!==undefined?p.targetX:cur.x) - cur.x) * 0.25;
-      cur.z += ((p.targetZ!==undefined?p.targetZ:cur.z) - cur.z) * 0.25;
+      cur.z += ((p.target Z!==undefined?p.targetZ:cur.z) - cur.z) * 0.25;
       p.group.rotation.y += (((p.yaw||0) - p.group.rotation.y + Math.PI*3) % (Math.PI*2) - Math.PI) * 0.25;
       p.group.visible = (p.hp === undefined || p.hp > 0);
       refreshNameSprite(p.group, p.name||'???', p.hp===undefined?100:p.hp, false);
