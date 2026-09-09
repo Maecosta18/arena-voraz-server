@@ -140,7 +140,7 @@ function genId(){ return crypto.randomBytes(9).toString('base64').replace(/[+/=]
 
 // closest intersection of a ray (origin,dir) with a sphere (center,radius),
 // within `maxDist`. Returns {dist, point} or null.
-function raySphereHit(origin, dir, center, r2adius, maxDist){
+function raySphereHit(origin, dir, center, radius, maxDist){
   const ocx = origin.x-center.x, ocy = origin.y-center.y, ocz = origin.z-center.z;
   const b = ocx*dir.x + ocy*dir.y + ocz*dir.z;
   const c = ocx*ocx+ocy*ocy+ocz*ocz - radius*radius;
