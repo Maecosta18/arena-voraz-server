@@ -48,11 +48,19 @@
   #nameInput{ width:100%; padding:11px 13px; border-radius:11px; border:2px solid var(--line); background:var(--surface2); color:var(--text); font-family:inherit; font-size:15px; font-weight:700; outline:none; }
   #nameInput::placeholder{ color:var(--text-dim); font-weight:600; }
   #nameInput:focus{ border-color:var(--amber); }
-  .swatches{ display:grid; grid-template-columns:repeat(6,1fr); gap:7px; }
+  .swatches{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
   .swatch{ aspect-ratio:1; border-radius:50%; border:3px solid transparent; cursor:pointer; position:relative; padding:0; }
   .swatch::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:rgba(255,255,255,.22); mix-blend-mode:overlay; }
   .swatch.sel{ border-color:var(--text); box-shadow:0 0 0 2px rgba(0,0,0,.3); transform:scale(1.08); }
   .swatch:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .swatch-custom-wrap{ overflow:hidden; background:conic-gradient(from 0deg,#ff5c5c,#ffb454,#6bd68a,#37e6c4,#7ea8ff,#c98bf0,#ff5c5c); }
+  .swatch-custom-input{ position:absolute; inset:0; width:100%; height:100%; border:none; padding:0; cursor:pointer; opacity:0; }
+  .swatch-custom-icon{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; pointer-events:none; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  #charPreviewWrap{ position:relative; width:100%; height:190px; border-radius:16px; overflow:hidden; margin:2px 0 6px; border:1px solid var(--line); background:radial-gradient(120% 140% at 50% 10%, #3a2440 0%, #241733 46%, #170f1c 100%); touch-action:none; }
+  #charPreviewCanvas{ display:block; width:100%; height:100%; cursor:grab; }
+  #charPreviewCanvas:active{ cursor:grabbing; }
+  .preview-hint{ position:absolute; left:0; right:0; bottom:6px; text-align:center; font-size:10.5px; color:rgba(251,233,208,.55); margin:0; pointer-events:none; letter-spacing:.03em; }
   .chiprow{ display:flex; flex-wrap:wrap; gap:7px; }
   .chip{ padding:8px 13px; border-radius:999px; border:2px solid var(--line); background:var(--surface2); color:var(--text); font-weight:800; font-size:12.5px; cursor:pointer; }
   .chip.sel{ border-color:var(--amber); color:var(--amber); background:rgba(255,180,84,.12); }
@@ -133,6 +141,11 @@
     <h1 class="title display">Arena Voraz</h1>
     <p class="tag">Armá tu personaje, elegí arma y sumá kills contra tus amigos en la misma arena.</p>
 
+    <div id="charPreviewWrap">
+      <canvas id="charPreviewCanvas"></canvas>
+      <p class="preview-hint">🔄 Arrastrá para girarlo</p>
+    </div>
+
     <label class="field-label" for="nameInput">Tu nombre</label>
     <input id="nameInput" maxlength="14" placeholder="¿Cómo te decimos?" autocomplete="off" />
 
@@ -174,6 +187,15 @@
   <div class="toast-wrap" id="toastWrap"></div>
 
   <div id="board">
+    <div class="board-row" style="justify-content:space-between; margin-bottom:2px;">
+      <span style="font-weight:800;">🤖 Bots</span>
+      <span style="display:flex; align-items:center; gap:8px;">
+        <button class="iconbtn" id="botMinusBtn" type="button" style="width:26px; height:26px; font-size:14px; margin-left:0;" aria-label="Sacar bot">−</button>
+        <span id="botCount" style="min-width:12px; text-align:center; font-variant-numeric:tabular-nums;">0</span>
+        <button class="iconbtn" id="botPlusBtn" type="button" style="width:26px; height:26px; font-size:14px; margin-left:0;" aria-label="Sumar bot">+</button>
+      </span>
+    </div>
+    <hr class="board-hr" />
     <h2>En la arena</h2>
     <div id="liveBoard"><p class="board-empty">Solo vos, por ahora.</p></div>
     <hr class="board-hr" />
@@ -185,8 +207,7 @@
   <div id="actionCluster">
     <button class="smallbtn" id="weaponBtn">BLASTER</button>
     <button class="smallbtn" id="jumpBtn" aria-label="Saltar">⬆</button>
-    <button id="fireBtn" type="button">DISPARAR</button>
-  </div>
+    <button id="fireBtn" type="button">DISPARAR</button>  </div>
   <p class="footnote" id="footnote"></p>
 </div>
 
@@ -267,6 +288,9 @@
   var boardEl = document.getElementById('board');
   var liveBoard = document.getElementById('liveBoard');
   var lifeBoard = document.getElementById('lifeBoard');
+  var botPlusBtn = document.getElementById('botPlusBtn');
+  var botMinusBtn = document.getElementById('botMinusBtn');
+  var botCountEl = document.getElementById('botCount');
   var joyBase = document.getElementById('joyBase');
   var joyKnob = document.getElementById('joyKnob');
   var lookZone = document.getElementById('lookZone');
@@ -276,6 +300,7 @@
   var footnote = document.getElementById('footnote');
   var game3d = document.getElementById('game3d');
   var bloodOverlay = document.getElementById('bloodOverlay');
+  var charPreviewCanvas = document.getElementById('charPreviewCanvas');
 
   nameInput.value = prefs.name;
   var mySkin = prefs.skin, myShirt = prefs.shirt, myPants = prefs.pants, myHair = prefs.hair,
@@ -292,22 +317,43 @@
       container.appendChild(b);
     });
   }
-  buildSwatchRow(skinSwatches, SKIN_TONES, mySkin, function(c){ mySkin=c; });
-  buildSwatchRow(shirtSwatches, SHIRT_COLORS, myShirt, function(c){ myShirt=c; });
-  buildSwatchRow(pantsSwatches, PANTS_COLORS, myPants, function(c){ myPants=c; });
-  buildSwatchRow(hairSwatches, HAIR_COLORS, myHair, function(c){ myHair=c; });
+  function addCustomColorSwatch(container, current, onPick){
+    var wrap = document.createElement('div');
+    wrap.className = 'swatch swatch-custom-wrap';
+    wrap.title = 'Color personalizado';
+    var inp = document.createElement('input');
+    inp.type = 'color'; inp.className = 'swatch-custom-input'; inp.value = current;
+    inp.setAttribute('aria-label', 'Color personalizado');
+    var icon = document.createElement('span');
+    icon.className = 'swatch-custom-icon'; icon.textContent = '🎨'; icon.setAttribute('aria-hidden','true');
+    wrap.appendChild(inp); wrap.appendChild(icon);
+    inp.addEventListener('input', function(){
+      Array.prototype.forEach.call(container.children, function(el){ el.classList.remove('sel'); });
+      wrap.classList.add('sel');
+      onPick(inp.value);
+    });
+    container.appendChild(wrap);
+  }
+  buildSwatchRow(skinSwatches, SKIN_TONES, mySkin, function(c){ mySkin=c; previewDirty=true; });
+  addCustomColorSwatch(skinSwatches, mySkin, function(c){ mySkin=c; previewDirty=true; });
+  buildSwatchRow(shirtSwatches, SHIRT_COLORS, myShirt, function(c){ myShirt=c; previewDirty=true; });
+  addCustomColorSwatch(shirtSwatches, myShirt, function(c){ myShirt=c; previewDirty=true; });
+  buildSwatchRow(pantsSwatches, PANTS_COLORS, myPants, function(c){ myPants=c; previewDirty=true; });
+  addCustomColorSwatch(pantsSwatches, myPants, function(c){ myPants=c; previewDirty=true; });
+  buildSwatchRow(hairSwatches, HAIR_COLORS, myHair, function(c){ myHair=c; previewDirty=true; });
+  addCustomColorSwatch(hairSwatches, myHair, function(c){ myHair=c; previewDirty=true; });
 
   HATS.forEach(function(h){
     var b = document.createElement('button');
     b.type='button'; b.className = 'chip' + (h.id===myHat?' sel':''); b.textContent = h.label;
     b.addEventListener('click', function(){
       Array.prototype.forEach.call(hatChips.children, function(el){ el.classList.remove('sel'); });
-      b.classList.add('sel'); myHat = h.id;
+      b.classList.add('sel'); myHat = h.id; previewDirty=true;
     });
     hatChips.appendChild(b);
   });
   if (myGlasses) glassesChip.classList.add('sel');
-  glassesChip.addEventListener('click', function(){ myGlasses = !myGlasses; glassesChip.classList.toggle('sel', myGlasses); });
+  glassesChip.addEventListener('click', function(){ myGlasses = !myGlasses; glassesChip.classList.toggle('sel', myGlasses); previewDirty=true; });
 
   Object.keys(WEAPONS).forEach(function(id){
     var w = WEAPONS[id];
@@ -316,10 +362,73 @@
     b.innerHTML = '<b>'+w.name+'</b><span>'+w.desc+'</span>';
     b.addEventListener('click', function(){
       Array.prototype.forEach.call(weaponPick.children, function(el){ el.classList.remove('sel'); });
-      b.classList.add('sel'); myWeaponId = id;
+      b.classList.add('sel'); myWeaponId = id; previewDirty=true;
     });
     weaponPick.appendChild(b);
   });
+  nameInput.addEventListener('input', function(){ previewDirty = true; });
+
+  /* ===================== live 3D character preview (intro screen) ===================== */
+  var previewScene = new THREE.Scene();
+  var previewCamera = new THREE.PerspectiveCamera(34, 1, 0.1, 20);
+  var previewRenderer = null;
+  var previewGroup = null;
+  var previewYaw = 0.55, previewAutoSpin = true, previewDragging = false, previewLastX = 0;
+  var previewDirty = true;
+
+  function setupPreview(){
+    if (!charPreviewCanvas || typeof THREE === 'undefined') return;
+    try{
+      previewRenderer = new THREE.WebGLRenderer({ canvas:charPreviewCanvas, antialias:true, alpha:true });
+    }catch(e){ return; }
+    previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+    var amb = new THREE.AmbientLight(0xfff2e0, 0.8); previewScene.add(amb);
+    var dir = new THREE.DirectionalLight(0xffe8c0, 0.95); dir.position.set(2.4, 4, 3); previewScene.add(dir);
+    var rim = new THREE.DirectionalLight(0xff8a53, 0.45); rim.position.set(-3, 2, -2.2); previewScene.add(rim);
+    resizePreview();
+    window.addEventListener('resize', resizePreview);
+
+    charPreviewCanvas.addEventListener('pointerdown', function(e){
+      previewDragging = true; previewAutoSpin = false; previewLastX = e.clientX;
+      try{ charPreviewCanvas.setPointerCapture(e.pointerId); }catch(err){}
+    });
+    charPreviewCanvas.addEventListener('pointermove', function(e){
+      if (!previewDragging) return;
+      var dx = e.clientX - previewLastX; previewLastX = e.clientX;
+      previewYaw += dx * 0.012;
+    });
+    ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
+      charPreviewCanvas.addEventListener(ev, function(){ previewDragging = false; });
+    });
+  }
+  function resizePreview(){
+    if (!previewRenderer || !charPreviewCanvas) return;
+    var w = charPreviewCanvas.clientWidth || 260, h = charPreviewCanvas.clientHeight || 190;
+    previewRenderer.setSize(w, h, false);
+    previewCamera.aspect = w / h; previewCamera.updateProjectionMatrix();
+  }
+  function rebuildPreviewAvatar(){
+    if (!previewRenderer) return;
+    if (previewGroup){ previewScene.remove(previewGroup); }
+    var pname = (nameInput.value||'').trim().slice(0,14) || 'Vos';
+    previewGroup = buildAvatar({ name:pname, skin:mySkin, shirt:myShirt, pants:myPants, hat:myHat, glasses:myGlasses, hair:myHair, isMe:true });
+    setWeaponModel(previewGroup.userData.anchor, myWeaponId);
+    previewScene.add(previewGroup);
+    previewDirty = false;
+  }
+  function previewLoop(){
+    requestAnimationFrame(previewLoop);
+    if (!previewRenderer || introEl.style.display === 'none') return;
+    if (previewDirty) rebuildPreviewAvatar();
+    if (previewAutoSpin) previewYaw += 0.007;
+    if (previewGroup) previewGroup.rotation.y = previewYaw;
+    previewCamera.position.set(0, 1.18, 3.05);
+    previewCamera.lookAt(0, 1.02, 0);
+    previewRenderer.render(previewScene, previewCamera);
+  }
+  setupPreview();
+  rebuildPreviewAvatar();
+  requestAnimationFrame(previewLoop);
 
   /* ===================== networking (own server, no account needed) ===================== */
   var ws = null, wsConnected = false, myId = null, joined = false, lastKnownPeerCount = 0;
@@ -404,8 +513,7 @@
     for (i=0;i<26;i++){
       g.beginPath();
       var sx = rng()*512, sy = rng()*512;
-      g.moveTo(sx, sy);
-      var segs = 3+((rng()*4)|0);
+      g.moveTo(sx, sy);  var segs = 3+((rng()*4)|0);
       for (var s=0;s<segs;s++){ sx += (rng()-0.5)*90; sy += (rng()-0.5)*90; g.lineTo(sx, sy); }
       g.stroke();
     }
@@ -681,6 +789,62 @@
     });
   }
 
+  /* ===================== sound (Web Audio API, sin archivos externos) ===================== */
+  var audioCtx = null;
+  function getAudioCtx(){
+    if (!audioCtx){
+      try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return null; }
+    }
+    if (audioCtx && audioCtx.state === 'suspended'){ audioCtx.resume().catch(function(){}); }
+    return audioCtx;
+  }
+  function playBlasterSound(){
+    var ctx = getAudioCtx(); if (!ctx) return;
+    var t0 = ctx.currentTime;
+    var osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(950, t0);
+    osc.frequency.exponentialRampToValueAtTime(210, t0+0.09);
+    gain.gain.setValueAtTime(0.001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.14, t0+0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0+0.12);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0+0.13);
+  }
+  function playHondaSound(){
+    var ctx = getAudioCtx(); if (!ctx) return;
+    var t0 = ctx.currentTime;
+    var osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(190, t0);
+    osc.frequency.exponentialRampToValueAtTime(65, t0+0.24);
+    gain.gain.setValueAtTime(0.001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.2, t0+0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0+0.28);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0+0.29);
+  }
+  function playShotSound(weaponId){
+    if (weaponId === 'honda') playHondaSound(); else playBlasterSound();
+  }
+  function playFootstepSound(){
+    var ctx = getAudioCtx(); if (!ctx) return;
+    var t0 = ctx.currentTime;
+    var dur = 0.07;
+    var bufferSize = Math.max(1, Math.round(ctx.sampleRate*dur));
+    var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for(var i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
+    var noise = ctx.createBufferSource(); noise.buffer = buffer;
+    var filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 280 + Math.random()*80;
+    var gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.16, t0+0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    noise.start(t0);
+  }
+
   /* ===================== visual fx (tracers, cosmetic projectiles, particle bursts) ===================== */
   var effects = [];
   var tracers = [];
@@ -730,6 +894,7 @@
   }
   function renderShotVisual(msg){
     var w = WEAPONS[msg.weapon] || WEAPONS.blaster;
+    playShotSound(msg.weapon);
     var from = new THREE.Vector3(msg.from.x, msg.from.y, msg.from.z);
     var dir = new THREE.Vector3(msg.dir.x, msg.dir.y, msg.dir.z);
     if (msg.weapon === 'honda'){
@@ -828,19 +993,27 @@
   /* ===================== peers (server is authority; we just render) ===================== */
   function upsertPeer(pl){
     if (!pl || pl.id === myId) return;
+    var displayName = (pl.isBot ? '🤖 ' : '') + pl.name;
     var peer = peers3D[pl.id];
     if (!peer){
-      var group = buildAvatar({ name:pl.name, skin:pl.skin, shirt:pl.shirt, pants:pl.pants, hat:pl.hat, glasses:!!pl.glasses, isMe:false });
+      var group = buildAvatar({ name:displayName, skin:pl.skin, shirt:pl.shirt, pants:pl.pants, hat:pl.hat, glasses:!!pl.glasses, isMe:false });
       scene.add(group);
       setWeaponModel(group.userData.anchor, pl.weapon || 'blaster');
-      peer = peers3D[pl.id] = { group:group, name:pl.name, shirt:pl.shirt, curWeapon:pl.weapon, hp:100, kills:0, targetX:pl.x, targetZ:pl.z, yaw:pl.yaw||0 };
+      peer = peers3D[pl.id] = { group:group, name:displayName, isBot:!!pl.isBot, shirt:pl.shirt, curWeapon:pl.weapon, hp:100, kills:0, targetX:pl.x, targetZ:pl.z, yaw:pl.yaw||0 };
     }
     peer.targetX = pl.x; peer.targetZ = pl.z; peer.yaw = pl.yaw||0;
-    peer.name = pl.name; peer.shirt = pl.shirt;
+    peer.name = displayName; peer.isBot = !!pl.isBot; peer.shirt = pl.shirt;
     if (pl.hp !== undefined) peer.hp = pl.hp;
     if (pl.kills !== undefined) peer.kills = pl.kills;
     if (pl.weapon && pl.weapon !== peer.curWeapon){ peer.curWeapon = pl.weapon; setWeaponModel(peer.group.userData.anchor, pl.weapon); }
   }
+  function updateBotCountUI(){
+    var n = 0;
+    Object.keys(peers3D).forEach(function(id){ if (peers3D[id].isBot) n++; });
+    botCountEl.textContent = n;
+  }
+  botPlusBtn.addEventListener('click', function(e){ e.stopPropagation(); wsSend({ t:'addBot' }); });
+  botMinusBtn.addEventListener('click', function(e){ e.stopPropagation(); wsSend({ t:'removeBot' }); });
   function removePeer(id){
     var peer = peers3D[id];
     if (peer){ scene.remove(peer.group); delete peers3D[id]; }
@@ -853,11 +1026,14 @@
       myId = msg.id;
       (msg.players||[]).forEach(upsertPeer);
       renderLifeBoard(msg.leaderboard);
+      updateBotCountUI();
       joined = true;
     } else if (msg.t === 'join'){
       upsertPeer(msg.player);
+      updateBotCountUI();
     } else if (msg.t === 'leave'){
       removePeer(msg.id);
+      updateBotCountUI();
     } else if (msg.t === 'state'){
       var seen = {};
       (msg.players||[]).forEach(function(pl){
@@ -931,18 +1107,25 @@
     if (!lookActive || e.pointerId !== lookId) return;
     var dx = e.clientX-lookLast.x, dy = e.clientY-lookLast.y;
     lookLast = { x:e.clientX, y:e.clientY };
-    camYaw -= dx*0.0045;
-    camPitch = Math.max(-0.1, Math.min(0.95, camPitch - dy*0.0035));
+    camYaw -= dx*0.0052;
+    camPitch = Math.max(-1.3, Math.min(1.2, camPitch - dy*0.0048));
   });
   lookZone.addEventListener('pointerup', function(e){ if (e.pointerId===lookId) lookActive=false; });
   lookZone.addEventListener('pointercancel', function(e){ if (e.pointerId===lookId) lookActive=false; });
 
   var keys = {};
+  function isTypingTarget(el){
+    return !!el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable);
+  }
   window.addEventListener('keydown', function(e){
+    if (isTypingTarget(document.activeElement)) return; // no robar teclas mientras escribís el nombre
     if (['w','a','s','d','W','A','S','D',' '].indexOf(e.key)>-1){ keys[e.key]=true; e.preventDefault(); }
     if (e.key==='r' || e.key==='R') cycleWeapon();
   }, { passive:false });
-  window.addEventListener('keyup', function(e){ keys[e.key]=false; });
+  window.addEventListener('keyup', function(e){
+    if (isTypingTarget(document.activeElement)) return;
+    keys[e.key]=false;
+  });
   function keyboardVec(){
     var x=0,y=0;
     if (keys['a']||keys['A']) x-=1; if (keys['d']||keys['D']) x+=1;
@@ -974,6 +1157,7 @@
 
   /* ===================== start ===================== */
   playBtn.addEventListener('click', function(){
+    getAudioCtx();
     var n = (nameInput.value||'').trim().slice(0,14);
     if (!n) n = 'Guerrer'+Math.floor(rng()*100);
     myName = n;
@@ -1002,6 +1186,7 @@
 
   /* ===================== main loop ===================== */
   var clock = new THREE.Clock();
+  var lastFootstepAt = 0;
   function loop(){
     var dt = Math.min(clock.getDelta(), 0.05);
 
@@ -1013,7 +1198,7 @@
       var jy = (kv.x!==0||kv.y!==0) ? kv.y : joyVec.y;
       var mag = Math.hypot(jx,jy);
       var forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
-      var right = new THREE.Vector3(forward.z, 0, -forward.x);
+      var right = new THREE.Vector3(-forward.z, 0, forward.x);
       if (mag > 0.12){
         var mv = new THREE.Vector3();
         mv.addScaledVector(forward, -jy).addScaledVector(right, jx);
@@ -1023,6 +1208,13 @@
           player.pos.x += mv.x*speed*dt;
           player.pos.z += mv.z*speed*dt;
           player.facing = Math.atan2(mv.x, mv.z);
+          if (player.grounded){
+            var nowMs = performance.now();
+            if (nowMs - lastFootstepAt > 320){
+              lastFootstepAt = nowMs;
+              playFootstepSound();
+            }
+          }
         }
       }
       isBlockedByObstacle(player.pos.x, player.pos.z, player.pos);
@@ -1052,7 +1244,7 @@
       var p = peers3D[uid];
       var cur = p.group.position;
       cur.x += ((p.targetX!==undefined?p.targetX:cur.x) - cur.x) * 0.25;
-      cur.z += ((p.target Z!==undefined?p.targetZ:cur.z) - cur.z) * 0.25;
+      cur.z += ((p.targetZ!==undefined?p.targetZ:cur.z) - cur.z) * 0.25;
       p.group.rotation.y += (((p.yaw||0) - p.group.rotation.y + Math.PI*3) % (Math.PI*2) - Math.PI) * 0.25;
       p.group.visible = (p.hp === undefined || p.hp > 0);
       refreshNameSprite(p.group, p.name||'???', p.hp===undefined?100:p.hp, false);
