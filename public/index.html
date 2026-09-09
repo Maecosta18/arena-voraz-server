@@ -152,14 +152,22 @@
     <label class="field-label">Piel</label>
     <div class="swatches" id="skinSwatches"></div>
 
-    <label class="field-label">Camiseta</label>
-    <div class="swatches" id="shirtSwatches"></div>
-
-    <label class="field-label">Pantalón</label>
-    <div class="swatches" id="pantsSwatches"></div>
+    <label class="field-label">Ojos</label>
+    <div class="swatches" id="eyeSwatches"></div>
 
     <label class="field-label">Pelo</label>
     <div class="swatches" id="hairSwatches"></div>
+
+    <label class="field-label">Rostro</label>
+    <div class="chiprow" id="facialChips"></div>
+
+    <label class="field-label">Remera</label>
+    <div class="chiprow" id="topChips"></div>
+    <div class="swatches" id="shirtSwatches" style="margin-top:7px;"></div>
+
+    <label class="field-label">Pantalón</label>
+    <div class="chiprow" id="bottomChips"></div>
+    <div class="swatches" id="pantsSwatches" style="margin-top:7px;"></div>
 
     <label class="field-label">Gorro</label>
     <div class="chiprow" id="hatChips"></div>
@@ -250,7 +258,11 @@
   var SHIRT_COLORS = ['#37e6c4','#ff5c5c','#ffb454','#7ea8ff','#c98bf0','#6bd68a'];
   var PANTS_COLORS = ['#22314f','#1c1c1c','#6b5b3e','#2f4a33','#4a4a4a','#5a3825'];
   var HAIR_COLORS = ['#1c140f','#3b2a1e','#caa15a','#8a3b28','#e8e8e8','#3fa0e0'];
+  var EYE_COLORS = ['#4a2f1f','#2f6fb3','#3f8f5a','#6a6a6a','#8a5a2f','#1a1210'];
   var HATS = [ {id:'none',label:'Ninguno'}, {id:'cap',label:'Gorra'}, {id:'band',label:'Vincha'}, {id:'party',label:'Fiesta'} ];
+  var FACIALS = [ {id:'none',label:'Ninguna'}, {id:'beard',label:'Barba'}, {id:'mustache',label:'Bigote'}, {id:'goatee',label:'Perilla'} ];
+  var TOPS = [ {id:'tank',label:'Musculosa'}, {id:'tshirt',label:'Remera'}, {id:'jacket',label:'Campera'} ];
+  var BOTTOMS = [ {id:'shorts',label:'Corto'}, {id:'long',label:'Largo'} ];
   var WEAPONS = {
     blaster: { id:'blaster', name:'Blaster', kind:'hitscan', range:46, dmg:22, cooldown:250, color:0x37e6c4, desc:'Rápido, cadencia alta, corto alcance' },
     honda:   { id:'honda',   name:'Honda',   kind:'projectile', range:40, dmg:34, splash:16, splashR:3.2, speed:22, cooldown:650, color:0xffb454, desc:'Fuerte, con daño de área' }
@@ -264,18 +276,26 @@
     prefs.shirt = localStorage.getItem('arenavoraz_shirt') || SHIRT_COLORS[0];
     prefs.pants = localStorage.getItem('arenavoraz_pants') || PANTS_COLORS[0];
     prefs.hair = localStorage.getItem('arenavoraz_hair') || HAIR_COLORS[0];
+    prefs.eye = localStorage.getItem('arenavoraz_eye') || EYE_COLORS[0];
     prefs.hat = localStorage.getItem('arenavoraz_hat') || 'none';
+    prefs.facial = localStorage.getItem('arenavoraz_facial') || 'none';
+    prefs.top = localStorage.getItem('arenavoraz_top') || 'tshirt';
+    prefs.bottom = localStorage.getItem('arenavoraz_bottom') || 'long';
     prefs.glasses = localStorage.getItem('arenavoraz_glasses') === '1';
     prefs.weapon = localStorage.getItem('arenavoraz_weapon') || 'blaster';
-  }catch(e){ prefs = { name:'', skin:SKIN_TONES[0], shirt:SHIRT_COLORS[0], pants:PANTS_COLORS[0], hair:HAIR_COLORS[0], hat:'none', glasses:false, weapon:'blaster' }; }
+  }catch(e){ prefs = { name:'', skin:SKIN_TONES[0], shirt:SHIRT_COLORS[0], pants:PANTS_COLORS[0], hair:HAIR_COLORS[0], eye:EYE_COLORS[0], hat:'none', facial:'none', top:'tshirt', bottom:'long', glasses:false, weapon:'blaster' }; }
 
   /* ===================== dom refs ===================== */
   var nameInput = document.getElementById('nameInput');
   var skinSwatches = document.getElementById('skinSwatches');
+  var eyeSwatches = document.getElementById('eyeSwatches');
   var shirtSwatches = document.getElementById('shirtSwatches');
   var pantsSwatches = document.getElementById('pantsSwatches');
   var hairSwatches = document.getElementById('hairSwatches');
   var hatChips = document.getElementById('hatChips');
+  var facialChips = document.getElementById('facialChips');
+  var topChips = document.getElementById('topChips');
+  var bottomChips = document.getElementById('bottomChips');
   var glassesChip = document.getElementById('glassesChip');
   var weaponPick = document.getElementById('weaponPick');
   var playBtn = document.getElementById('playBtn');
@@ -304,8 +324,8 @@
   var charPreviewCanvas = document.getElementById('charPreviewCanvas');
 
   nameInput.value = prefs.name;
-  var mySkin = prefs.skin, myShirt = prefs.shirt, myPants = prefs.pants, myHair = prefs.hair,
-      myHat = prefs.hat, myGlasses = prefs.glasses, myWeaponId = prefs.weapon;
+  var mySkin = prefs.skin, myShirt = prefs.shirt, myPants = prefs.pants, myHair = prefs.hair, myEye = prefs.eye,
+      myHat = prefs.hat, myFacial = prefs.facial, myTop = prefs.top, myBottom = prefs.bottom, myGlasses = prefs.glasses, myWeaponId = prefs.weapon;
 
   function buildSwatchRow(container, colors, current, onPick){
     colors.forEach(function(c){
@@ -335,14 +355,31 @@
     });
     container.appendChild(wrap);
   }
+  function buildChipRow(container, options, current, onPick){
+    options.forEach(function(o){
+      var b = document.createElement('button');
+      b.type='button'; b.className = 'chip' + (o.id===current?' sel':''); b.textContent = o.label;
+      b.addEventListener('click', function(){
+        Array.prototype.forEach.call(container.children, function(el){ el.classList.remove('sel'); });
+        b.classList.add('sel'); onPick(o.id); previewDirty=true;
+      });
+      container.appendChild(b);
+    });
+  }
   buildSwatchRow(skinSwatches, SKIN_TONES, mySkin, function(c){ mySkin=c; previewDirty=true; });
   addCustomColorSwatch(skinSwatches, mySkin, function(c){ mySkin=c; previewDirty=true; });
+  buildSwatchRow(eyeSwatches, EYE_COLORS, myEye, function(c){ myEye=c; previewDirty=true; });
+  addCustomColorSwatch(eyeSwatches, myEye, function(c){ myEye=c; previewDirty=true; });
   buildSwatchRow(shirtSwatches, SHIRT_COLORS, myShirt, function(c){ myShirt=c; previewDirty=true; });
   addCustomColorSwatch(shirtSwatches, myShirt, function(c){ myShirt=c; previewDirty=true; });
   buildSwatchRow(pantsSwatches, PANTS_COLORS, myPants, function(c){ myPants=c; previewDirty=true; });
   addCustomColorSwatch(pantsSwatches, myPants, function(c){ myPants=c; previewDirty=true; });
   buildSwatchRow(hairSwatches, HAIR_COLORS, myHair, function(c){ myHair=c; previewDirty=true; });
   addCustomColorSwatch(hairSwatches, myHair, function(c){ myHair=c; previewDirty=true; });
+
+  buildChipRow(facialChips, FACIALS, myFacial, function(id){ myFacial=id; });
+  buildChipRow(topChips, TOPS, myTop, function(id){ myTop=id; });
+  buildChipRow(bottomChips, BOTTOMS, myBottom, function(id){ myBottom=id; });
 
   HATS.forEach(function(h){
     var b = document.createElement('button');
@@ -412,7 +449,7 @@
     if (!previewRenderer) return;
     if (previewGroup){ previewScene.remove(previewGroup); }
     var pname = (nameInput.value||'').trim().slice(0,14) || 'Vos';
-    previewGroup = buildAvatar({ name:pname, skin:mySkin, shirt:myShirt, pants:myPants, hat:myHat, glasses:myGlasses, hair:myHair, isMe:true });
+    previewGroup = buildAvatar({ name:pname, skin:mySkin, shirt:myShirt, pants:myPants, hat:myHat, glasses:myGlasses, hair:myHair, eye:myEye, facial:myFacial, top:myTop, bottom:myBottom, isMe:true });
     setWeaponModel(previewGroup.userData.anchor, myWeaponId);
     previewScene.add(previewGroup);
     previewDirty = false;
@@ -619,7 +656,7 @@
     }
   }
 
-  /* ===================== avatar builder (humanoid, editable clothing) ===================== */
+  /* ===================== avatar builder (humanoid, editable clothing & face) ===================== */
   function makeNameTexture(name, hp, isMe){
     var c = document.createElement('canvas'); c.width = 220; c.height = 74;
     var g = c.getContext('2d');
@@ -651,71 +688,140 @@
     var pantsMat = new THREE.MeshLambertMaterial({ color: cfg.pants });
     var shoeMat = new THREE.MeshLambertMaterial({ color: 0x2a2018 });
     var hairMat = new THREE.MeshLambertMaterial({ color: cfg.hair || 0x3b2a1e });
+    var accentMat = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
+    var top = cfg.top || 'tshirt';
+    var bottom = cfg.bottom || 'long';
+    var facial = cfg.facial || 'none';
 
-    // legs (tapered: wider at hip, narrower at ankle)
-    var legGeo = new THREE.CylinderGeometry(0.09, 0.13, 0.86, 8);
-    var legL = new THREE.Mesh(legGeo, pantsMat); legL.position.set(-0.14, 0.45, 0);
-    var legR = new THREE.Mesh(legGeo, pantsMat); legR.position.set(0.14, 0.45, 0);
-    g.add(legL, legR);
-    var shoeGeo = new THREE.BoxGeometry(0.19, 0.11, 0.27);
-    var shoeL = new THREE.Mesh(shoeGeo, shoeMat); shoeL.position.set(-0.14, 0.055, 0.03);
-    var shoeR = new THREE.Mesh(shoeGeo, shoeMat); shoeR.position.set(0.14, 0.055, 0.03);
-    g.add(shoeL, shoeR);
+    // ---- legs: 'long' = pants all the way to a booted ankle; 'shorts' = pants only
+    // to mid-thigh, bare skin knee-down, simple shoe (no cuff) ----
+    if (bottom === 'shorts'){
+      var shortGeo = new THREE.CylinderGeometry(0.135, 0.115, 0.26, 8);
+      var shortL = new THREE.Mesh(shortGeo, pantsMat); shortL.position.set(-0.15, 0.79, 0);
+      var shortR = new THREE.Mesh(shortGeo, pantsMat); shortR.position.set(0.15, 0.79, 0);
+      g.add(shortL, shortR);
+      var shinGeo = new THREE.CylinderGeometry(0.085, 0.1, 0.62, 8);
+      var shinL = new THREE.Mesh(shinGeo, skinMat); shinL.position.set(-0.15, 0.5, 0);
+      var shinR = new THREE.Mesh(shinGeo, skinMat); shinR.position.set(0.15, 0.5, 0);
+      g.add(shinL, shinR);
+      var shoeGeo0 = new THREE.BoxGeometry(0.19, 0.12, 0.27);
+      var shoeL0 = new THREE.Mesh(shoeGeo0, shoeMat); shoeL0.position.set(-0.15, 0.08, 0.025);
+      var shoeR0 = new THREE.Mesh(shoeGeo0, shoeMat); shoeR0.position.set(0.15, 0.08, 0.025);
+      g.add(shoeL0, shoeR0);
+    } else {
+      var calfGeo = new THREE.CylinderGeometry(0.105, 0.125, 0.62, 8);
+      var legL = new THREE.Mesh(calfGeo, pantsMat); legL.position.set(-0.15, 0.52, 0);
+      var legR = new THREE.Mesh(calfGeo, pantsMat); legR.position.set(0.15, 0.52, 0);
+      g.add(legL, legR);
+      var cuffGeo = new THREE.CylinderGeometry(0.115, 0.115, 0.06, 8);
+      var cuffL = new THREE.Mesh(cuffGeo, accentMat); cuffL.position.set(-0.15, 0.225, 0);
+      var cuffR = new THREE.Mesh(cuffGeo, accentMat); cuffR.position.set(0.15, 0.225, 0);
+      g.add(cuffL, cuffR);
+      var bootGeo = new THREE.BoxGeometry(0.2, 0.19, 0.29);
+      var bootL = new THREE.Mesh(bootGeo, shoeMat); bootL.position.set(-0.15, 0.1, 0.025);
+      var bootR = new THREE.Mesh(bootGeo, shoeMat); bootR.position.set(0.15, 0.1, 0.025);
+      g.add(bootL, bootR);
+    }
 
-    // hips + torso (tapered cylinder: wider shoulders, narrower waist)
-    var hips = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.16, 10), pantsMat);
-    hips.position.set(0, 0.92, 0); g.add(hips);
-    var torso = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.18, 0.56, 10), shirtMat);
-    torso.position.set(0, 1.28, 0); g.add(torso);
+    // ---- hips + torso: two-piece chest with a belt seam ----
+    var hips = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.17, 0.2, 10), pantsMat);
+    hips.position.set(0, 0.93, 0); g.add(hips);
+    var belt = new THREE.Mesh(new THREE.CylinderGeometry(0.212, 0.212, 0.05, 10), accentMat);
+    belt.position.set(0, 1.03, 0); g.add(belt);
+    var torsoLow = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.205, 0.22, 10), shirtMat);
+    torsoLow.position.set(0, 1.17, 0); g.add(torsoLow);
+    var torsoUp = new THREE.Mesh(new THREE.CylinderGeometry(0.255, 0.2, 0.32, 10), shirtMat);
+    torsoUp.position.set(0, 1.42, 0); g.add(torsoUp);
 
-    // arms: sleeve (shirt) + forearm/hand (skin)
-    var sleeveGeo = new THREE.CylinderGeometry(0.085, 0.08, 0.30, 8);
-    var forearmGeo = new THREE.CylinderGeometry(0.062, 0.075, 0.30, 8);
-    var handGeo = new THREE.SphereGeometry(0.075, 8, 8);
-    var sleeveL = new THREE.Mesh(sleeveGeo, shirtMat); sleeveL.position.set(-0.335, 1.28, 0);
-    var sleeveR = new THREE.Mesh(sleeveGeo, shirtMat); sleeveR.position.set(0.335, 1.28, 0);
-    var forearmL = new THREE.Mesh(forearmGeo, skinMat); forearmL.position.set(-0.335, 0.98, 0);
-    var forearmR = new THREE.Mesh(forearmGeo, skinMat); forearmR.position.set(0.335, 0.98, 0);
-    var handL = new THREE.Mesh(handGeo, skinMat); handL.position.set(-0.335, 0.80, 0);
-    var handR = new THREE.Mesh(handGeo, skinMat); handR.position.set(0.335, 0.80, 0);
-    g.add(sleeveL, sleeveR, forearmL, forearmR, handL, handR);
+    // ---- shoulder pads ----
+    var padGeo = new THREE.SphereGeometry(0.135, 10, 8);
+    var padL = new THREE.Mesh(padGeo, shirtMat); padL.position.set(-0.335, 1.545, 0); padL.scale.set(1,0.8,1);
+    var padR = new THREE.Mesh(padGeo, shirtMat); padR.position.set(0.335, 1.545, 0); padR.scale.set(1,0.8,1);
+    g.add(padL, padR);
 
-    // neck + head
-    var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.12, 8), skinMat);
-    neck.position.set(0, 1.60, 0); g.add(neck);
-    var head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 10), skinMat);
-    head.position.set(0, 1.83, 0); g.add(head);
+    // ---- arms: 'tank' = bare skin all the way from the shoulder pad; 'tshirt' = short
+    // sleeve + bare forearm; 'jacket' = sleeve covers the whole arm to the wrist ----
+    if (top === 'tank'){
+      var armGeoT = new THREE.CylinderGeometry(0.075, 0.085, 0.56, 8);
+      var armLT = new THREE.Mesh(armGeoT, skinMat); armLT.position.set(-0.335, 1.24, 0);
+      var armRT = new THREE.Mesh(armGeoT, skinMat); armRT.position.set(0.335, 1.24, 0);
+      g.add(armLT, armRT);
+    } else if (top === 'jacket'){
+      var sleeveGeoJ = new THREE.CylinderGeometry(0.1, 0.088, 0.58, 8);
+      var sleeveLJ = new THREE.Mesh(sleeveGeoJ, shirtMat); sleeveLJ.position.set(-0.335, 1.24, 0);
+      var sleeveRJ = new THREE.Mesh(sleeveGeoJ, shirtMat); sleeveRJ.position.set(0.335, 1.24, 0);
+      g.add(sleeveLJ, sleeveRJ);
+      var cuffGeoJ = new THREE.CylinderGeometry(0.078, 0.078, 0.05, 8);
+      var cuffLJ = new THREE.Mesh(cuffGeoJ, accentMat); cuffLJ.position.set(-0.335, 0.965, 0);
+      var cuffRJ = new THREE.Mesh(cuffGeoJ, accentMat); cuffRJ.position.set(0.335, 0.965, 0);
+      g.add(cuffLJ, cuffRJ);
+    } else {
+      var sleeveGeo = new THREE.CylinderGeometry(0.095, 0.085, 0.28, 8);
+      var forearmGeo = new THREE.CylinderGeometry(0.068, 0.08, 0.28, 8);
+      var sleeveL = new THREE.Mesh(sleeveGeo, shirtMat); sleeveL.position.set(-0.335, 1.395, 0);
+      var sleeveR = new THREE.Mesh(sleeveGeo, shirtMat); sleeveR.position.set(0.335, 1.395, 0);
+      var forearmL = new THREE.Mesh(forearmGeo, skinMat); forearmL.position.set(-0.335, 1.09, 0);
+      var forearmR = new THREE.Mesh(forearmGeo, skinMat); forearmR.position.set(0.335, 1.09, 0);
+      g.add(sleeveL, sleeveR, forearmL, forearmR);
+    }
+    var handGeo = new THREE.BoxGeometry(0.12, 0.1, 0.15);
+    var handL = new THREE.Mesh(handGeo, skinMat); handL.position.set(-0.335, 0.90, 0);
+    var handR = new THREE.Mesh(handGeo, skinMat); handR.position.set(0.335, 0.90, 0);
+    g.add(handL, handR);
 
-    var eyeMat = new THREE.MeshBasicMaterial({ color:0x1a1210 });
-    var eyeGeo = new THREE.SphereGeometry(0.028, 6, 6);
-    var eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.10, 1.85, 0.235);
-    var eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.10, 1.85, 0.235);
+    // ---- neck + head ----
+    var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 0.1, 8), skinMat);
+    neck.position.set(0, 1.755, 0); g.add(neck);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.265, 14, 12), skinMat);
+    head.position.set(0, 1.985, 0); head.scale.set(1, 1.04, 0.94); g.add(head);
+
+    var eyeMat = new THREE.MeshBasicMaterial({ color: cfg.eye || 0x1a1210 });
+    var eyeGeo = new THREE.SphereGeometry(0.03, 6, 6);
+    var eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.10, 2.00, 0.245);
+    var eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.10, 2.00, 0.245);
     g.add(eyeL, eyeR);
+    var pupilMat = new THREE.MeshBasicMaterial({ color:0x0a0806 });
+    var pupilGeo = new THREE.SphereGeometry(0.013, 6, 6);
+    var pupilL = new THREE.Mesh(pupilGeo, pupilMat); pupilL.position.set(-0.10, 2.00, 0.268);
+    var pupilR = new THREE.Mesh(pupilGeo, pupilMat); pupilR.position.set(0.10, 2.00, 0.268);
+    g.add(pupilL, pupilR);
+
+    // ---- facial hair ----
+    if (facial === 'beard'){
+      var beard = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8, 0, Math.PI*2, Math.PI*0.42, Math.PI*0.5), hairMat);
+      beard.position.set(0, 1.92, 0.02); beard.scale.set(1, 0.85, 0.85); g.add(beard);
+    } else if (facial === 'mustache'){
+      var stache = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.035, 0.05), hairMat);
+      stache.position.set(0, 1.925, 0.255); g.add(stache);
+    } else if (facial === 'goatee'){
+      var goat = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.13, 8), hairMat);
+      goat.position.set(0, 1.845, 0.19); goat.rotation.x = Math.PI; g.add(goat);
+    }
 
     if (cfg.glasses){
       var gl = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.09,0.05), new THREE.MeshBasicMaterial({ color:0x0a0a0a }));
-      gl.position.set(0, 1.85, 0.25); g.add(gl);
+      gl.position.set(0, 2.00, 0.26); g.add(gl);
     }
 
     if (cfg.hat === 'none'){
-      var hair = new THREE.Mesh(new THREE.SphereGeometry(0.275, 12, 10, 0, Math.PI*2, 0, Math.PI*0.56), hairMat);
-      hair.position.set(0, 1.86, 0); g.add(hair);
+      var hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10, 0, Math.PI*2, 0, Math.PI*0.56), hairMat);
+      hair.position.set(0, 2.02, 0); hair.scale.set(1,1,0.96); g.add(hair);
     } else if (cfg.hat === 'cap'){
-      var cap = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10, 0, Math.PI*2, 0, Math.PI*0.56), shirtMat);
-      cap.position.set(0, 1.87, 0); g.add(cap);
+      var cap = new THREE.Mesh(new THREE.SphereGeometry(0.285, 12, 10, 0, Math.PI*2, 0, Math.PI*0.56), shirtMat);
+      cap.position.set(0, 2.03, 0); g.add(cap);
       var brim = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.05,0.18), shirtMat);
-      brim.position.set(0, 1.80, 0.30); g.add(brim);
+      brim.position.set(0, 1.96, 0.30); g.add(brim);
     } else if (cfg.hat === 'band'){
-      var hair2 = new THREE.Mesh(new THREE.SphereGeometry(0.275, 12, 10, 0, Math.PI*2, 0, Math.PI*0.56), hairMat);
-      hair2.position.set(0, 1.86, 0); g.add(hair2);
-      var band = new THREE.Mesh(new THREE.TorusGeometry(0.275,0.045,6,14), shirtMat);
-      band.rotation.x = Math.PI/2; band.position.set(0, 1.83, 0); g.add(band);
+      var hair2 = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10, 0, Math.PI*2, 0, Math.PI*0.56), hairMat);
+      hair2.position.set(0, 2.02, 0); g.add(hair2);
+      var band = new THREE.Mesh(new THREE.TorusGeometry(0.28,0.045,6,14), shirtMat);
+      band.rotation.x = Math.PI/2; band.position.set(0, 1.99, 0); g.add(band);
     } else if (cfg.hat === 'party'){
       var cone = new THREE.Mesh(new THREE.ConeGeometry(0.24,0.46,10), new THREE.MeshLambertMaterial({ color:0xffce54 }));
-      cone.position.set(0, 2.28, 0); g.add(cone);
+      cone.position.set(0, 2.44, 0); g.add(cone);
     }
 
-    var anchor = new THREE.Group(); anchor.position.set(0.335, 0.80, 0.18);
+    var anchor = new THREE.Group(); anchor.position.set(0.335, 0.90, 0.18);
     g.add(anchor);
 
     var shadow = new THREE.Mesh(new THREE.CircleGeometry(0.48,16), new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.35 }));
@@ -723,7 +829,7 @@
 
     var nameTex = new THREE.CanvasTexture(makeNameTexture(cfg.name||'???', 100, !!cfg.isMe));
     var nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:nameTex, depthTest:false, transparent:true }));
-    nameSprite.scale.set(1.5, 0.5, 1); nameSprite.position.set(0, 2.55, 0);
+    nameSprite.scale.set(1.5, 0.5, 1); nameSprite.position.set(0, 2.75, 0);
     g.add(nameSprite);
 
     g.userData = { anchor:anchor, nameSprite:nameSprite, lastHpBucket:100, lastName:null };
@@ -998,7 +1104,7 @@
     var displayName = (pl.isBot ? '🤖 ' : '') + pl.name;
     var peer = peers3D[pl.id];
     if (!peer){
-      var group = buildAvatar({ name:displayName, skin:pl.skin, shirt:pl.shirt, pants:pl.pants, hat:pl.hat, glasses:!!pl.glasses, isMe:false });
+      var group = buildAvatar({ name:displayName, skin:pl.skin, shirt:pl.shirt, pants:pl.pants, hat:pl.hat, glasses:!!pl.glasses, hair:pl.hair, eye:pl.eye, facial:pl.facial, top:pl.top, bottom:pl.bottom, isMe:false });
       scene.add(group);
       setWeaponModel(group.userData.anchor, pl.weapon || 'blaster');
       peer = peers3D[pl.id] = { group:group, name:displayName, isBot:!!pl.isBot, shirt:pl.shirt, curWeapon:pl.weapon, hp:100, kills:0, targetX:pl.x, targetZ:pl.z, yaw:pl.yaw||0 };
@@ -1169,7 +1275,11 @@
       localStorage.setItem('arenavoraz_shirt', myShirt);
       localStorage.setItem('arenavoraz_pants', myPants);
       localStorage.setItem('arenavoraz_hair', myHair);
+      localStorage.setItem('arenavoraz_eye', myEye);
       localStorage.setItem('arenavoraz_hat', myHat);
+      localStorage.setItem('arenavoraz_facial', myFacial);
+      localStorage.setItem('arenavoraz_top', myTop);
+      localStorage.setItem('arenavoraz_bottom', myBottom);
       localStorage.setItem('arenavoraz_glasses', myGlasses ? '1':'0');
       localStorage.setItem('arenavoraz_weapon', myWeaponId);
     }catch(e){}
@@ -1178,11 +1288,11 @@
     weaponBtn.textContent = WEAPONS[myWeaponId].name.toUpperCase();
     hpFill.style.width = '100%';
 
-    myGroup = buildAvatar({ name:myName, skin:mySkin, shirt:myShirt, pants:myPants, hat:myHat, glasses:myGlasses, hair:myHair, isMe:true });
+    myGroup = buildAvatar({ name:myName, skin:mySkin, shirt:myShirt, pants:myPants, hat:myHat, glasses:myGlasses, hair:myHair, eye:myEye, facial:myFacial, top:myTop, bottom:myBottom, isMe:true });
     scene.add(myGroup);
     setWeaponModel(myGroup.userData.anchor, myWeaponId);
 
-    wsSend({ t:'join', name:myName, skin:mySkin, shirt:myShirt, pants:myPants, hat:myHat, glasses:myGlasses, weapon:myWeaponId });
+    wsSend({ t:'join', name:myName, skin:mySkin, shirt:myShirt, pants:myPants, hat:myHat, glasses:myGlasses, weapon:myWeaponId, hair:myHair, eye:myEye, facial:myFacial, top:myTop, bottom:myBottom });
     requestAnimationFrame(loop);
   });
 
