@@ -207,7 +207,8 @@
   <div id="actionCluster">
     <button class="smallbtn" id="weaponBtn">BLASTER</button>
     <button class="smallbtn" id="jumpBtn" aria-label="Saltar">⬆</button>
-    <button id="fireBtn" type="button">DISPARAR</button>  </div>
+    <button id="fireBtn" type="button">DISPARAR</button>
+  </div>
   <p class="footnote" id="footnote"></p>
 </div>
 
@@ -834,7 +835,7 @@
     var bufferSize = Math.max(1, Math.round(ctx.sampleRate*dur));
     var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     var data = buffer.getChannelData(0);
-    for(var i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
+    for (var i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
     var noise = ctx.createBufferSource(); noise.buffer = buffer;
     var filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 280 + Math.random()*80;
     var gain = ctx.createGain();
